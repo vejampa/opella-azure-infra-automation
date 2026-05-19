@@ -1,0 +1,26 @@
+customer        = "opella"
+category        = "app"
+applicationname = "devops"
+environment     = "d"
+location        = "eastus"
+
+resource_group_name         = ""
+virtual_network_name        = ""
+subnet_name                 = ""
+network_security_group_name = ""
+storage_account_name        = ""
+
+vnet_address_space      = ["10.10.0.0/16"]
+subnet_address_prefixes = ["10.10.1.0/24"]
+
+container_name           = "appdata"
+account_tier             = "Standard"
+account_replication_type = "LRS"
+
+tags = {
+  project     = "opella-infra-dev"
+  environment = "dev"
+  owner       = "veerendra"
+  managed_by  = "terraform"
+  cost_center = "opella-dev"
+}
