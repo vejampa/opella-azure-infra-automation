@@ -1,7 +1,16 @@
-name: Terraform Dev Apply
+name: Terraform Multi Environment Apply
 
 on:
   workflow_dispatch:
+    inputs:
+      environment:
+        description: "Select environment to deploy"
+        required: true
+        default: "development"
+        type: choice
+        options:
+          - development
+          - production
 
 env:
   ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -13,9 +22,11 @@ permissions:
   contents: read
 
 jobs:
-  terraform-dev-apply:
-    name: Terraform Plan and Apply - Dev
+  terraform-plan-apply:
+    name: Terraform Plan and Apply - ${{ github.event.inputs.environment }}
     runs-on: ubuntu-latest
+
+    environment: ${{ github.event.inputs.environment }}
 
     defaults:
       run:
@@ -41,26 +52,42 @@ jobs:
               "tenantId": "${{ secrets.AZURE_TENANT_ID }}"
             }
 
+      - name: Set Terraform environment mapping
+        run: |
+          if [ "${{ github.event.inputs.environment }}" = "development" ]; then
+            echo "TF_ENV=dev" >> $GITHUB_ENV
+          elif [ "${{ github.event.inputs.environment }}" = "production" ]; then
+            echo "TF_ENV=prod" >> $GITHUB_ENV
+          else
+            echo "Invalid environment selected"
+            exit 1
+          fi
+
       - name: Terraform Format Check
         run: terraform fmt -check -recursive
 
-      - name: Terraform Init - Dev Backend
-        run: terraform init -input=false -backend-config="backend-dev.hcl"
+      - name: Terraform Init
+        run: terraform init -input=false -backend-config="backend-${{ env.TF_ENV }}.hcl"
 
       - name: Terraform Validate
         run: terraform validate
 
-      - name: Terraform Plan - Dev
-        run: terraform plan -input=false -var-file="dev.tfvars" -out="dev.tfplan"
+      - name: Terraform Plan
+        run: |
+          terraform plan \
+            -input=false \
+            -var-file="${{ env.TF_ENV }}.tfvars.example" \
+            -out="${{ env.TF_ENV }}.tfplan"
 
       - name: Save Terraform Plan Output
-        run: terraform show -no-color dev.tfplan > dev-terraform-plan-output.txt
+        run: |
+          terraform show -no-color "${{ env.TF_ENV }}.tfplan" > "${{ env.TF_ENV }}-terraform-plan-output.txt"
 
       - name: Upload Terraform Plan Output
         uses: actions/upload-artifact@v4
         with:
-          name: dev-terraform-plan-output
-          path: environments/opella/dev-terraform-plan-output.txt
+          name: ${{ env.TF_ENV }}-terraform-plan-output
+          path: environments/opella/${{ env.TF_ENV }}-terraform-plan-output.txt
 
-      - name: Terraform Apply - Dev
-        run: terraform apply -input=false -auto-approve dev.tfplan
+      - name: Terraform Apply
+        run: terraform apply -input=false -auto-approve "${{ env.TF_ENV }}.tfplan"
