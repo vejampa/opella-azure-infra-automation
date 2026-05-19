@@ -1,0 +1,66 @@
+name: Terraform Dev Apply
+
+on:
+  workflow_dispatch:
+
+env:
+  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+
+permissions:
+  contents: read
+
+jobs:
+  terraform-dev-apply:
+    name: Terraform Plan and Apply - Dev
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: environments/opella
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.6
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: |
+            {
+              "clientId": "${{ secrets.AZURE_CLIENT_ID }}",
+              "clientSecret": "${{ secrets.AZURE_CLIENT_SECRET }}",
+              "subscriptionId": "${{ secrets.AZURE_SUBSCRIPTION_ID }}",
+              "tenantId": "${{ secrets.AZURE_TENANT_ID }}"
+            }
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Init - Dev Backend
+        run: terraform init -input=false -backend-config="backend-dev.hcl"
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan - Dev
+        run: terraform plan -input=false -var-file="dev.tfvars" -out="dev.tfplan"
+
+      - name: Save Terraform Plan Output
+        run: terraform show -no-color dev.tfplan > dev-terraform-plan-output.txt
+
+      - name: Upload Terraform Plan Output
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-terraform-plan-output
+          path: environments/opella/dev-terraform-plan-output.txt
+
+      - name: Terraform Apply - Dev
+        run: terraform apply -input=false -auto-approve dev.tfplan
